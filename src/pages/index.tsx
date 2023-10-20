@@ -1,27 +1,22 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import MenuItem from "~/components/MenuItem";
-import { useMenu } from "~/contexts/Menu";
+import { useState } from "react";
 import { useOrder } from "~/contexts/Order";
 
 export default function Home() {
-  const { menuItems, setMenuItems, checkOut } = useMenu();
-  const { fiatAmount } = useOrder();
+  const [fiatAmount, setFiatAmount] = useState(200);
+  const [vote, setVote] = useState(50);
 
+  const { checkOut, setAmount } = useOrder();
   const router = useRouter();
 
-  const setQuantity = (menuIndex: number, quantity: number) => {
-    setMenuItems!((items) => {
-      items[menuIndex]!.quantity = quantity;
-      return [...items];
-    });
-  };
-
   const nextStep = async () => {
-    const { eventId } = await checkOut!();
+    setAmount(1000);
+    const { eventId } = await checkOut();
+
+    console.info("eventId", eventId);
     void router.push(`/checkout/${eventId}`);
   };
-
   return (
     <>
       <Head>
@@ -34,17 +29,23 @@ export default function Home() {
           <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-[3rem]">
             La Crypta Elecciones
           </h1>
-          <div className="flex w-full flex-col gap-4">
-            {menuItems.map((item, k) => (
-              <MenuItem
-                key={k}
-                name={item.name}
-                price={item.price}
-                quantity={item.quantity}
-                onChange={setQuantity.bind(null, k)}
-              />
-            ))}
+          <div className="flex w-full flex-col gap-4 text-white">
+            Voto en Porcentaje
+            <input
+              value={vote}
+              className="text-black"
+              onChange={(e) => setVote(parseInt(e.currentTarget.value))}
+            />
           </div>
+          <div className="flex w-full flex-col gap-4 text-white">
+            Total a apostar
+            <input
+              value={fiatAmount}
+              className="text-black"
+              onChange={(e) => setFiatAmount(parseInt(e.currentTarget.value))}
+            />
+          </div>
+
           {fiatAmount > 0 ? (
             <div className="absolute bottom-5 w-full p-5 text-white">
               <button

@@ -36,6 +36,8 @@ export interface IOrderContext {
   items?: IMenuItem[];
   zapEvents: NDKEvent[];
   currentInvoice?: string;
+  setAmount: Dispatch<SetStateAction<number>>;
+  checkOut: () => Promise<{ eventId: string }>;
   setCurrentInvoice?: Dispatch<SetStateAction<string | undefined>>;
   setOrderEvent?: Dispatch<SetStateAction<NDKEvent | undefined>>;
   generateOrderEvent?: (content: unknown) => Event;
@@ -55,6 +57,12 @@ export const OrderContext = createContext<IOrderContext>({
   fiatAmount: 0,
   zapEvents: [],
   fiatCurrency: "ARS",
+  checkOut: function (): Promise<{ eventId: string }> {
+    throw new Error("Function not implemented.");
+  },
+  setAmount: function (): void {
+    throw new Error("Function not implemented.");
+  },
 });
 
 // Component Props
@@ -79,7 +87,7 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
   const { relays, localPublicKey, localPrivateKey, generateZapEvent } =
     useNostr();
   const { requestInvoice, recipientPubkey } = useLN();
-  const { subscribeZap } = useNostr();
+  const { subscribeZap, publish } = useNostr();
 
   // on orderEvent change
   useEffect(() => {
@@ -173,6 +181,17 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     relays,
   ]);
 
+  // Checkout function
+  const checkOut = useCallback(async (): Promise<{
+    eventId: string;
+  }> => {
+    // Order Nostr event
+    const order = generateOrderEvent();
+    await publish!(order);
+
+    return { eventId: order.id };
+  }, [generateOrderEvent, publish]);
+
   const addZapEvent = useCallback((event: NDKEvent) => {
     const invoice = parseZapInvoice(event as Event);
     if (!invoice.complete) {
@@ -230,6 +249,8 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
         pendingAmount,
         totalPaid,
         currentInvoice,
+        checkOut,
+        setAmount,
         setCurrentInvoice,
         requestZapInvoice,
         generateOrderEvent,

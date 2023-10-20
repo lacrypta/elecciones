@@ -1,6 +1,5 @@
 import { type AppType } from "next/dist/shared/lib/utils";
 import { LNProvider } from "~/contexts/LN";
-import { MenuProvider } from "~/contexts/Menu";
 import { NostrProvider } from "~/contexts/Nostr";
 import { OrderProvider } from "~/contexts/Order";
 import "~/styles/globals.css";
@@ -10,9 +9,7 @@ const MyApp: AppType = ({ Component, pageProps }) => {
     <LNProvider>
       <NostrProvider>
         <OrderProvider>
-          <MenuProvider>
-            <Component {...pageProps} />
-          </MenuProvider>
+          <Component {...pageProps} />
         </OrderProvider>
       </NostrProvider>
     </LNProvider>
