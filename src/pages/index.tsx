@@ -25,14 +25,14 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>La Crypta - POS Light</title>
-        <meta name="description" content="La Crypta POS" />
+        <title>La Crypta - Elecciones</title>
+        <meta name="description" content="La Crypta Elecciones" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-[#2e026d] to-[#15162c]">
         <div className="container flex flex-col items-center justify-center gap-6 px-4 py-6 ">
           <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-[3rem]">
-            La Crypta POS
+            La Crypta Elecciones
           </h1>
           <div className="flex w-full flex-col gap-4">
             {menuItems.map((item, k) => (

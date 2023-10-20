@@ -22,7 +22,8 @@ import {
   parseOrderDescription,
   parseZapInvoice,
 } from "~/lib/utils";
-import { getEventHash, getSignature } from "nostr-tools";
+import { getEventHash, getSignature, validateEvent } from "nostr-tools";
+import bolt11 from "bolt11";
 
 // Interface
 export interface IOrderContext {
@@ -77,7 +78,8 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
 
   const { relays, localPublicKey, localPrivateKey, generateZapEvent } =
     useNostr();
-  const { requestInvoice } = useLN();
+  const { requestInvoice, recipientPubkey } = useLN();
+  const { subscribeZap } = useNostr();
 
   // on orderEvent change
   useEffect(() => {
@@ -107,6 +109,23 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     setFiatAmount(_total);
     setAmount(Math.round(_total / SAT_ARS_RATE));
   }, [items]);
+
+  // Subscribe for zaps
+  useEffect(() => {
+    if (!orderId || !recipientPubkey) {
+      return;
+    }
+    console.info(`Subscribing for ${orderId}...`);
+    const sub = subscribeZap!(orderId);
+
+    sub.addListener("event", onZap);
+
+    return () => {
+      sub.removeAllListeners();
+      sub.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, recipientPubkey]);
 
   const generateOrderEvent = useCallback((): Event => {
     const unsignedEvent: UnsignedEvent = {
@@ -181,6 +200,23 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     },
     [generateZapEvent, requestInvoice]
   );
+
+  // Handle new incoming zap
+  const onZap = (event: NDKEvent) => {
+    if (event.pubkey !== recipientPubkey) {
+      throw new Error("Invalid Recipient Pubkey");
+    }
+
+    if (!validateEvent(event)) {
+      throw new Error("Invalid event");
+    }
+
+    const paidInvoice = event.tags.find((tag) => tag[0] === "bolt11")?.[1];
+    const decodedPaidInvoice = bolt11.decode(paidInvoice!);
+
+    addZapEvent(event);
+    console.info("Amount paid : " + decodedPaidInvoice.millisatoshis);
+  };
 
   return (
     <OrderContext.Provider

@@ -3,23 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
-// Libs
-import bolt11 from "bolt11";
-import { validateEvent } from "nostr-tools";
-
 // Hooks
 import { useNostr } from "~/contexts/Nostr";
-import { useLN } from "~/contexts/LN";
 import { useOrder } from "~/contexts/Order";
 
-// Types
-import type { NDKEvent } from "@nostr-dev-kit/ndk";
-
 // Components
-import Zap from "~/components/Zap";
 import QRCode from "react-qr-code";
-import { Progress } from "react-sweet-progress";
-import "react-sweet-progress/lib/style.css";
 import QRModal from "~/components/QRModal";
 
 export default function Home() {
@@ -27,27 +16,22 @@ export default function Home() {
   const {
     query: { orderId: queryOrderId },
   } = useRouter();
-  const { recipientPubkey } = useLN();
-  const { subscribeZap, getEvent } = useNostr();
+  const { getEvent } = useNostr();
+
   const {
     orderId,
     currentInvoice: invoice,
     setCurrentInvoice,
     requestZapInvoice,
     setOrderEvent,
-    addZapEvent,
-    zapEvents,
     amount,
     fiatAmount,
     pendingAmount,
-    totalPaid,
   } = useOrder();
 
   // State Hooks
   const [isLoading, setIsLoading] = useState(true);
-  const [invoiceAutoRefreshEnabled, setInvoiceAutoRefreshEnabled] =
-    useState(false);
-  const [, setAutoRefreshTimeout] = useState<NodeJS.Timeout>();
+  useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
   // Fetch order if not already fetched
@@ -63,62 +47,33 @@ export default function Home() {
     }
 
     console.info("Fetching order...");
-    void getEvent!(queryOrderId as string).then((event) => {
-      if (!event) {
-        alert("Order not found");
-        setIsLoading(false);
-        return;
-      }
+    void getEvent!(queryOrderId as string)
+      .then((event) => {
+        console.info("getEvent!", queryOrderId);
+        if (!event) {
+          alert("Order not found");
+          setIsLoading(false);
+          return;
+        }
 
-      console.info("Setting new order");
-      setOrderEvent!(event);
-      setIsLoading(false);
-    });
+        console.info("Setting new order");
+        setOrderEvent!(event);
+        setIsLoading(false);
+      })
+      .catch((e) => {
+        console.error("Error fetching order", e);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryOrderId]);
 
-  // Subscribe for zaps
+  // On mount
   useEffect(() => {
-    if (!orderId || !recipientPubkey) {
+    if (pendingAmount === 0) {
       return;
     }
-    console.info(`Subscribing for ${orderId}...`);
-    const sub = subscribeZap!(orderId);
-
-    sub.addListener("event", onZap);
-
-    sub.on("eose", () => {
-      setInvoiceAutoRefreshEnabled(true);
-      runAutoRefreshTimeout();
-    });
-
-    return () => {
-      sub.removeAllListeners();
-      sub.stop();
-    };
+    void refreshInvoice();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, recipientPubkey]);
-
-  // Handle new incoming zap
-  const onZap = (event: NDKEvent) => {
-    if (event.pubkey !== recipientPubkey) {
-      throw new Error("Invalid Recipient Pubkey");
-    }
-
-    if (!validateEvent(event)) {
-      throw new Error("Invalid event");
-    }
-
-    const paidInvoice = event.tags.find((tag) => tag[0] === "bolt11")?.[1];
-    const decodedPaidInvoice = bolt11.decode(paidInvoice!);
-
-    if (invoice !== paidInvoice) {
-      console.info("Zap received");
-    }
-
-    addZapEvent!(event);
-    console.info("Amount paid : " + decodedPaidInvoice.millisatoshis);
-  };
+  }, [pendingAmount]);
 
   const refreshInvoice = useCallback(async () => {
     console.info("pendingAmount", pendingAmount);
@@ -130,40 +85,17 @@ export default function Home() {
     setCurrentInvoice!(invoice);
   }, [orderId, pendingAmount, requestZapInvoice, setCurrentInvoice]);
 
-  const runAutoRefreshTimeout = useCallback(() => {
-    console.info("RUNNING!!");
-    setAutoRefreshTimeout((currentTimeout) => {
-      clearTimeout(currentTimeout);
-      return setTimeout(() => {
-        console.info("Refresh");
-        void refreshInvoice();
-      }, 200);
-    });
-  }, [refreshInvoice]);
-
-  useEffect(() => {
-    if (pendingAmount <= 0) {
-      return;
-    }
-    if (invoiceAutoRefreshEnabled) {
-      console.info("Renew auto refresh timeout");
-      runAutoRefreshTimeout();
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceAutoRefreshEnabled, pendingAmount]);
-
   return (
     <>
       <Head>
         <title>La Crypta - Checkout</title>
-        <meta name="description" content="La Crypta POS - Checkout" />
+        <meta name="description" content="La Crypta Elecciones 2023" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <main className="relative flex min-h-screen flex-col items-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
         <div className="container flex flex-col items-center justify-center gap-6 px-4 py-6 ">
           <h1 className="text-2xl font-extrabold tracking-tight sm:text-[3rem]">
-            La Crypta POS
+            La Crypta - Elecciones 2023
           </h1>
           {isLoading ? (
             <div>Cargando...</div>
@@ -173,49 +105,18 @@ export default function Home() {
                 {pendingAmount <= 0 ? (
                   <div>Pagado</div>
                 ) : (
-                  <a href={`lightning://${invoice}`}>
-                    <QRCode width={"200%"} value={invoice ?? "nothing"} />
-                  </a>
+                  <>
+                    <a href={`lightning://${invoice}`}>
+                      <QRCode width={"200%"} value={invoice ?? "nothing"} />
+                    </a>
+                    <div className="">
+                      <textarea className="w-full text-sm" value={invoice} />
+                    </div>
+                  </>
                 )}
               </div>
               <div className="text-3xl">ARS {fiatAmount}</div>
               <div className="text-4xl">{amount} sats</div>
-              {pendingAmount > 0 ? (
-                <div className="text-3xl">Pendiente {pendingAmount} sats</div>
-              ) : (
-                ""
-              )}
-              {pendingAmount < 0 ? (
-                <div className="text-3xl text-green-500">
-                  Propina +{-pendingAmount} sats
-                </div>
-              ) : (
-                ""
-              )}
-
-              <div className="flex w-full flex-col justify-center">
-                <Progress
-                  type="circle"
-                  percent={((totalPaid / amount) * 100).toFixed(2)}
-                  status={totalPaid >= amount ? "success" : "active"}
-                />
-              </div>
-              <div>
-                {zapEvents.length < 1 ? (
-                  <div>Sin pagos</div>
-                ) : (
-                  <h2>Zaps recibidos ({totalPaid} sats)</h2>
-                )}
-                <div className="grid">
-                  {zapEvents.map((event) => (
-                    <Zap key={event.id} event={event}></Zap>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <button onClick={() => setIsOpen(true)}>VER POST</button>
-              </div>
             </div>
           )}
         </div>
