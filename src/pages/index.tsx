@@ -1,22 +1,29 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOrder } from "~/contexts/Order";
 
+const SAT_ARS_RATE = 0.26;
+
 export default function Home() {
-  const [fiatAmount, setFiatAmount] = useState(200);
   const [vote, setVote] = useState(50);
 
-  const { checkOut, setAmount } = useOrder();
+  const { fiatAmount, amount, checkOut, setAmount, setFiatAmount, setMemo } =
+    useOrder();
   const router = useRouter();
 
   const nextStep = async () => {
     setAmount(1000);
+    setMemo({ vote });
     const { eventId } = await checkOut();
 
     console.info("eventId", eventId);
     void router.push(`/checkout/${eventId}`);
   };
+
+  useEffect(() => {
+    setAmount(Math.round(fiatAmount / SAT_ARS_RATE));
+  }, [fiatAmount, setAmount]);
   return (
     <>
       <Head>
@@ -33,6 +40,7 @@ export default function Home() {
             Voto en Porcentaje
             <input
               value={vote}
+              type="number"
               className="text-black"
               onChange={(e) => setVote(parseInt(e.currentTarget.value))}
             />
@@ -40,6 +48,7 @@ export default function Home() {
           <div className="flex w-full flex-col gap-4 text-white">
             Total a apostar
             <input
+              type="number"
               value={fiatAmount}
               className="text-black"
               onChange={(e) => setFiatAmount(parseInt(e.currentTarget.value))}
@@ -54,6 +63,7 @@ export default function Home() {
               >
                 Pagar ARS {fiatAmount}
               </button>
+              <>{amount} sats</>
             </div>
           ) : (
             ""

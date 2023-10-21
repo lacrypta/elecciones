@@ -10,14 +10,13 @@ import {
 // Types
 import type { Dispatch, SetStateAction } from "react";
 import type { Event, UnsignedEvent } from "nostr-tools";
-import type { IMenuItem } from "~/types/menu";
+import type { UserData } from "~/types/user";
 import { useLN } from "./LN";
 import type { NDKEvent } from "@nostr-dev-kit/ndk";
 
 // Utils
 import { useNostr } from "./Nostr";
 import {
-  calcTotal,
   generateEventContent,
   parseOrderDescription,
   parseZapInvoice,
@@ -30,19 +29,21 @@ export interface IOrderContext {
   orderId?: string;
   amount: number;
   pendingAmount: number;
-  totalPaid: number;
   fiatAmount: number;
   fiatCurrency?: string;
-  items?: IMenuItem[];
   zapEvents: NDKEvent[];
   currentInvoice?: string;
+  userData?: UserData;
+  memo: unknown;
+  setMemo: Dispatch<SetStateAction<unknown>>;
+  setUserData: Dispatch<SetStateAction<UserData | undefined>>;
   setAmount: Dispatch<SetStateAction<number>>;
   checkOut: () => Promise<{ eventId: string }>;
   setCurrentInvoice?: Dispatch<SetStateAction<string | undefined>>;
   setOrderEvent?: Dispatch<SetStateAction<NDKEvent | undefined>>;
   generateOrderEvent?: (content: unknown) => Event;
+  setFiatAmount: Dispatch<SetStateAction<number>>;
   addZapEvent?: (event: NDKEvent) => void;
-  setItems?: Dispatch<SetStateAction<IMenuItem[]>>;
   requestZapInvoice?: (
     amountMillisats: number,
     orderEventId: string
@@ -53,7 +54,6 @@ export interface IOrderContext {
 export const OrderContext = createContext<IOrderContext>({
   amount: 0,
   pendingAmount: 0,
-  totalPaid: 0,
   fiatAmount: 0,
   zapEvents: [],
   fiatCurrency: "ARS",
@@ -63,6 +63,16 @@ export const OrderContext = createContext<IOrderContext>({
   setAmount: function (): void {
     throw new Error("Function not implemented.");
   },
+  setFiatAmount: function (): void {
+    throw new Error("Function not implemented.");
+  },
+  setUserData: function (_value: SetStateAction<UserData | undefined>): void {
+    throw new Error("Function not implemented.");
+  },
+  memo: undefined,
+  setMemo: function (_value: unknown): void {
+    throw new Error("Function not implemented.");
+  },
 });
 
 // Component Props
@@ -70,18 +80,16 @@ interface IOrderProviderProps {
   children: React.ReactNode;
 }
 
-const SAT_ARS_RATE = 0.18;
-
 export const OrderProvider = ({ children }: IOrderProviderProps) => {
   const [orderId, setOrderId] = useState<string>();
   const [orderEvent, setOrderEvent] = useState<NDKEvent>();
   const [amount, setAmount] = useState<number>(0);
+  const [userData, setUserData] = useState<UserData>();
+  const [memo, setMemo] = useState<unknown>({});
   const [currentInvoice, setCurrentInvoice] = useState<string>();
   const [pendingAmount, setPendingAmount] = useState<number>(0);
-  const [totalPaid, setTotalPaid] = useState<number>(0);
   const [fiatAmount, setFiatAmount] = useState<number>(0);
   const [fiatCurrency, setFiatCurrency] = useState<string>("ARS");
-  const [items, setItems] = useState<IMenuItem[]>([]);
   const [zapEvents, setZapEvents] = useState<NDKEvent[]>([]);
 
   const { relays, localPublicKey, localPrivateKey, generateZapEvent } =
@@ -97,7 +105,6 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
       setPendingAmount(0);
       setFiatAmount(0);
       setFiatCurrency("ARS");
-      setItems([]);
       return;
     }
 
@@ -108,15 +115,7 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     setPendingAmount(description.amount);
     setFiatAmount(description.fiatAmount);
     setFiatCurrency(description.fiatCurrency);
-    setItems(description.items);
   }, [orderEvent]);
-
-  // Calculate total on menu change
-  useEffect(() => {
-    const _total = calcTotal(items);
-    setFiatAmount(_total);
-    setAmount(Math.round(_total / SAT_ARS_RATE));
-  }, [items]);
 
   // Subscribe for zaps
   useEffect(() => {
@@ -142,7 +141,6 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
         amount: amount,
         fiatAmount: fiatAmount,
         fiatCurrency,
-        items,
       }),
       pubkey: localPublicKey!,
       created_at: Math.round(Date.now() / 1000),
@@ -152,7 +150,7 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
         [
           "description",
           JSON.stringify({
-            items,
+            memo,
             fiatAmount,
             fiatCurrency,
             amount,
@@ -175,10 +173,10 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     amount,
     fiatAmount,
     fiatCurrency,
-    items,
     localPrivateKey,
     localPublicKey,
     relays,
+    memo,
   ]);
 
   // Checkout function
@@ -200,7 +198,6 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
     }
     const amountPaid = parseInt(invoice.millisatoshis!) / 1000;
     setPendingAmount((prev) => prev - amountPaid);
-    setTotalPaid((total) => total + amountPaid);
     setZapEvents((prev) => [...prev, event]);
   }, []);
 
@@ -245,18 +242,20 @@ export const OrderProvider = ({ children }: IOrderProviderProps) => {
         amount,
         fiatAmount,
         fiatCurrency,
-        items,
         pendingAmount,
-        totalPaid,
         currentInvoice,
+        userData,
+        memo,
+        setMemo,
+        setUserData,
         checkOut,
         setAmount,
+        setFiatAmount,
         setCurrentInvoice,
         requestZapInvoice,
         generateOrderEvent,
         setOrderEvent,
         addZapEvent,
-        setItems,
       }}
     >
       {children}
